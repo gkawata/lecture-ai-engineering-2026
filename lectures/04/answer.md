@@ -136,6 +136,7 @@
 **Authors:** Jenny Yang, Elizabeth Proehl, Anjan Bharadwaj, Emily Fan, Charlotte Cole, James Kim, Noam Brown, Phoebe Thacker, Amelia Glaese, Tejal Patwardhan (OpenAI)
 
 **Summary** LifeVal (Evaluating AI Model Performance on Personalized Agentic Consumer Tasks) uses a multi-stage human and automated verification process, relies on several distinct groups of participants, and evaluates frontier OpenAI models across 169 personalized tasks.
+
 ---
 
 ## 1. Verification & Quality Control Methodology
