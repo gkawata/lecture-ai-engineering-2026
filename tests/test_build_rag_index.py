@@ -42,6 +42,48 @@ def test_built_index_can_be_searched(materials, monkeypatch):
     assert hits[0]["distance"] == pytest.approx(0)
 
 
+def test_graph_search_traverses_related_terms_with_weights(tmp_path, monkeypatch):
+    source = tmp_path / "lectures.json"
+    source.write_text(json.dumps([
+        {"id": "lec02-main", "title": "基盤モデル", "content": [
+            {"section": "章", "content": [
+                {"id": "lec02-main-p052", "title": "LoRAとQLoRA", "page": 52,
+                 "content": "LoRAとQLoRAの説明"},
+                {"id": "lec02-main-p053", "title": "関連するQLoRAの説明", "page": 53,
+                 "content": "QLoRAは4bit量子化する"}]}
+        ]}
+    ], ensure_ascii=False), encoding="utf-8")
+    graph = tmp_path / "graph.json"
+    graph.write_text(json.dumps({
+        "nodes": [
+            {"id": "lec02-main-p052", "kind": "page", "title": "LoRAとQLoRA"},
+            {"id": "lec02-main-p053", "kind": "page", "title": "関連するQLoRAの説明"},
+            {"id": "term:lora", "kind": "term", "title": "LoRA"},
+            {"id": "term:qlora", "kind": "term", "title": "QLoRA"},
+        ],
+        "edges": [
+            {"source": "lec02-main-p052", "target": "term:lora", "relation": "mentions"},
+            {"source": "term:lora", "target": "term:qlora", "relation": "related_term"},
+            {"source": "term:qlora", "target": "lec02-main-p053", "relation": "mentions"},
+        ],
+    }, ensure_ascii=False), encoding="utf-8")
+
+    monkeypatch.setattr(retrieval, "RAG_SOURCE", source)
+    monkeypatch.setattr(retrieval, "RAG_GRAPH", graph)
+    monkeypatch.setattr(retrieval, "GRAPH_HOPS", 3)
+    monkeypatch.setattr(retrieval, "search", lambda query: [
+        {"page_id": "lec02-main-p052", "distance": 0.1,
+         "content": "LoRAとQLoRAの説明"}
+    ])
+
+    result = retrieval.search_graph("LoRAとQLoRA")
+
+    assert result["seeds"]
+    assert [candidate["page_id"] for candidate in result["expanded"]] == ["lec02-main-p053"]
+    assert result["expanded"][0]["relation_weight"] == 2.3
+    assert result["relation_weights"]["related_term"] == 0.7
+
+
 def test_existing_index_survives_failed_rebuild(materials):
     source, database = materials
     build_index(source, database, embedder=lambda *_: [1, 0])

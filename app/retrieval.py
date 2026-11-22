@@ -18,6 +18,7 @@ from app.config import (
     EMBEDDING_DIMENSIONS, EMBEDDING_MAX_TOKENS, EMBEDDING_MODEL,
     RAG_DB, RAG_DOCUMENT_IDS, RAG_SOURCE, RAG_TOP_K, RAG_TREE, get_api_key,
     RAG_GRAPH, GRAPH_START_K, GRAPH_HOPS, GRAPH_MAX_RESULTS,
+    GRAPH_RELATION_WEIGHTS,
 )
 
 
@@ -139,17 +140,26 @@ def search(query: str) -> list[dict]:
 
 
 def search_graph(query: str) -> dict:
-    """ベクトル検索を入口に、前後ページと共通用語で候補を広げる。"""
+    """ベクトル検索を入口に、ページ・用語・関連語の関係から候補を広げる。"""
     pages = {page["page_id"]: page for page in load_pages(RAG_SOURCE)}
     graph = json.loads(RAG_GRAPH.read_text(encoding="utf-8"))
     nodes = {node["id"]: node for node in graph["nodes"]
              if node["kind"] == "term" or node["id"] in pages}
     adjacent = defaultdict(set)
+    edge_weights = {}
     for edge in graph["edges"]:
+        relation = edge["relation"]
+        if relation not in ("next_page", "mentions", "related_term"):
+            continue
         a, b = edge["source"], edge["target"]
-        if edge["relation"] in ("next_page", "mentions") and a in nodes and b in nodes:
+        if a in nodes and b in nodes:
             adjacent[a].add(b)
             adjacent[b].add(a)
+            pair = frozenset((a, b))
+            edge_weights[pair] = max(
+                edge_weights.get(pair, 0.0),
+                GRAPH_RELATION_WEIGHTS.get(relation, 0.0),
+            )
 
     seeds = [hit for hit in search(query) if hit["page_id"] in pages][:min(GRAPH_START_K, GRAPH_MAX_RESULTS)]
     seed_ids = {seed["page_id"] for seed in seeds}
@@ -175,14 +185,20 @@ def search_graph(query: str) -> dict:
                 if neighbor not in pages or neighbor in seed_ids:
                     continue
                 frequency = max((len(adjacent[n]) for n in route if nodes[n]["kind"] == "term"), default=0)
-                priority = (len(route) - 1, frequency, rank, neighbor)
+                relation_weight = sum(
+                    edge_weights.get(frozenset((route[index], route[index + 1])), 0.0)
+                    for index in range(len(route) - 1)
+                )
+                priority = (-relation_weight, len(route) - 1, frequency, rank, neighbor)
                 candidate = {**pages[neighbor], "hops": len(route) - 1,
+                             "relation_weight": round(relation_weight, 2),
                              "path": [{"id": n, "title": nodes[n]["title"]} for n in route]}
                 if neighbor not in candidates or priority < candidates[neighbor][0]:
                     candidates[neighbor] = (priority, candidate)
     expanded = [candidate for _, candidate in sorted(candidates.values())]
     return {"seeds": results, "expanded": expanded[:max(0, GRAPH_MAX_RESULTS - len(results))],
-            "max_hops": GRAPH_HOPS}
+            "max_hops": GRAPH_HOPS,
+            "relation_weights": GRAPH_RELATION_WEIGHTS}
 
 
 

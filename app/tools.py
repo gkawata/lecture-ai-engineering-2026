@@ -112,9 +112,9 @@ def browse_tree(node_id: str | None = None) -> str:
 
 
 def search_graph(query: str) -> str:
-    """資料を検索し、前後ページ・共通用語をたどって関連ページの本文と引用情報を返す。
+    """資料を検索し、前後ページ・共通用語・関連用語をたどって候補と引用情報を返す。
 
-    queryに調べたい内容を指定する。
+    queryには検索したい概念を含める。複数回を比較する場合は、講義回ごとに別の検索語で呼ぶ。
     """
     import sqlite3
     from google.genai.errors import APIError
