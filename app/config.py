@@ -22,6 +22,12 @@ RAG_TOP_K = 5
 GRAPH_START_K = 3
 GRAPH_HOPS = 2
 GRAPH_MAX_RESULTS = 10
+GRAPH_RELATION_WEIGHTS = {
+    "next_page": 1.0,
+    "mentions": 0.8,
+    "related_term": 0.7,
+    "contains": 0.3,
+}
 EMBEDDING_MODEL = "gemini-embedding-001"
 EMBEDDING_DIMENSIONS = 768
 # 2,048トークンの上限に対し、タスク指定等の分を残す。超過時は切り捨てず停止する。
